@@ -1,0 +1,277 @@
+[Reading 273 lines from start (total: 273 lines, 0 remaining)]
+
+name: Build Aseprite
+
+on:
+  workflow_dispatch:
+    inputs:
+      aseprite_ref:
+        description: "Aseprite tag / branch / commit SHA, or latest"
+        required: true
+        default: "latest"
+        type: string
+      platform:
+        description: "Platform to build"
+        required: true
+        default: "windows"
+        type: choice
+        options:
+          - windows
+          - linux
+          - macos
+          - all
+      build_type:
+        description: "CMake build type"
+        required: true
+        default: "Release"
+        type: choice
+        options:
+          - Release
+          - RelWithDebInfo
+
+# AUTO-CHECK / SCHEDULED BUILD IS DISABLED FOR NOW.
+# Uncomment this block when you want automatic daily checks/builds again.
+#
+#  schedule:
+#    - cron: "0 2 * * *"  # 09:00 Asia/Ho_Chi_Minh
+#
+# Future auto-check idea:
+# - Resolve aseprite/aseprite latest release tag.
+# - Compare it with the last successfully built version.
+# - Build Windows/Linux/macOS only when a new release appears.
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      aseprite_ref: \${{ steps.prep.outputs.aseprite_ref }}
+      ref_safe: \${{ steps.prep.outputs.ref_safe }}
+      matrix: \${{ steps.prep.outputs.matrix }}
+      build_type: \${{ steps.prep.outputs.build_type }}
+    steps:
+      - name: Resolve build inputs
+        id: prep
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          requested_ref="\${{ github.event.inputs.aseprite_ref }}"
+          requested_platform="\${{ github.event.inputs.platform }}"
+          build_type="\${{ github.event.inputs.build_type }}"
+
+          if [[ -z "$requested_ref" || "$requested_ref" == "latest" ]]; then
+            aseprite_ref="$(curl -fsSL https://api.github.com/repos/aseprite/aseprite/releases/latest | jq -r .tag_name)"
+          else
+            aseprite_ref="$requested_ref"
+          fi
+
+          ref_safe="$(echo "$aseprite_ref" | tr '/:@ ' '----' | tr -cd 'A-Za-z0-9._-')"
+
+          case "$requested_platform" in
+            windows)
+              matrix='{"include":[{"os":"windows-latest","name":"Windows-x64","kind":"windows"}]}'
+              ;;
+            linux)
+              matrix='{"include":[{"os":"ubuntu-latest","name":"Linux-x64","kind":"linux"}]}'
+              ;;
+            macos)
+              matrix='{"include":[{"os":"macos-latest","name":"macOS","kind":"macos"}]}'
+              ;;
+            all)
+              matrix='{"include":[{"os":"windows-latest","name":"Windows-x64","kind":"windows"},{"os":"ubuntu-latest","name":"Linux-x64","kind":"linux"},{"os":"macos-latest","name":"macOS","kind":"macos"}]}'
+              ;;
+            *)
+              echo "Unknown platform: $requested_platform" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "aseprite_ref=$aseprite_ref" >> "$GITHUB_OUTPUT"
+          echo "ref_safe=$ref_safe" >> "$GITHUB_OUTPUT"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "build_type=$build_type" >> "$GITHUB_OUTPUT"
+
+          echo "Aseprite ref: $aseprite_ref"
+          echo "Platform: $requested_platform"
+          echo "Build type: $build_type"
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: \${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: \${{ matrix.os }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout Aseprite
+        uses: actions/checkout@v4
+        with:
+          repository: aseprite/aseprite
+          ref: \${{ needs.prepare.outputs.aseprite_ref }}
+          submodules: recursive
+          path: aseprite
+
+      - name: Install Ninja
+        uses: aseprite/get-ninja@main
+
+      - name: Setup MSVC x64
+        if: matrix.kind == 'windows'
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
+      - name: Install Linux dependencies
+        if: matrix.kind == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake unzip libx11-dev libxcursor-dev libxi-dev libxrandr-dev libgl1-mesa-dev libfontconfig1-dev
+
+      - name: Download matching Skia
+        shell: bash
+        working-directory: aseprite
+        run: |
+          set -euo pipefail
+
+          case "\${{ matrix.kind }}" in
+            windows)
+              skia_platform=Windows
+              skia_arch=x64
+              ;;
+            linux)
+              skia_platform=Linux
+              skia_arch=x64
+              ;;
+            macos)
+              skia_platform=macOS
+              case "$(uname -m)" in
+                arm64|aarch64) skia_arch=arm64 ;;
+                *) skia_arch=x64 ;;
+              esac
+              ;;
+          esac
+
+          skia_url="$(bash laf/misc/skia-url.sh Release "$skia_platform" "$skia_arch" | xargs)"
+          skia_file="$(basename "$skia_url")"
+
+          echo "Skia: $skia_url"
+          curl --ssl-revoke-best-effort -fL --retry 3 -o "$skia_file" "$skia_url"
+          mkdir -p skia
+          unzip -q "$skia_file" -d skia
+
+          echo "SKIA_DIR=$(pwd)/skia" >> "$GITHUB_ENV"
+          echo "SKIA_LIBRARY_DIR=$(pwd)/skia/out/Release-$skia_arch" >> "$GITHUB_ENV"
+          echo "ASEPRITE_ARCH=$skia_arch" >> "$GITHUB_ENV"
+
+      - name: Configure Windows
+        if: matrix.kind == 'windows'
+        shell: bash
+        working-directory: aseprite
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=\${{ needs.prepare.outputs.build_type }} \
+            -DENABLE_TESTS=OFF \
+            -DLAF_BACKEND=skia \
+            -DSKIA_DIR="$SKIA_DIR" \
+            -DSKIA_LIBRARY_DIR="$SKIA_LIBRARY_DIR"
+
+      - name: Configure Linux
+        if: matrix.kind == 'linux'
+        shell: bash
+        working-directory: aseprite
+        run: |
+          export CC=clang
+          export CXX=clang++
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=\${{ needs.prepare.outputs.build_type }} \
+            -DCMAKE_CXX_FLAGS:STRING=-stdlib=libstdc++ \
+            -DCMAKE_EXE_LINKER_FLAGS:STRING=-stdlib=libstdc++ \
+            -DENABLE_TESTS=OFF \
+            -DLAF_BACKEND=skia \
+            -DSKIA_DIR="$SKIA_DIR" \
+            -DSKIA_LIBRARY_DIR="$SKIA_LIBRARY_DIR"
+
+      - name: Configure macOS
+        if: matrix.kind == 'macos'
+        shell: bash
+        working-directory: aseprite
+        run: |
+          case "$ASEPRITE_ARCH" in
+            arm64)
+              cmake_arch=arm64
+              deploy_target=11.0
+              ;;
+            *)
+              cmake_arch=x86_64
+              deploy_target=10.14
+              ;;
+          esac
+
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=\${{ needs.prepare.outputs.build_type }} \
+            -DCMAKE_OSX_ARCHITECTURES="$cmake_arch" \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="$deploy_target" \
+            -DENABLE_TESTS=OFF \
+            -DLAF_BACKEND=skia \
+            -DSKIA_DIR="$SKIA_DIR" \
+            -DSKIA_LIBRARY_DIR="$SKIA_LIBRARY_DIR"
+
+      - name: Build Aseprite
+        shell: bash
+        working-directory: aseprite
+        run: ninja -C build aseprite
+
+      - name: Verify Windows
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        working-directory: aseprite
+        run: |
+          .\build\bin\aseprite.exe --version
+          if (!(Test-Path .\build\bin\aseprite.exe)) { throw "aseprite.exe missing" }
+
+      - name: Verify Linux
+        if: matrix.kind == 'linux'
+        shell: bash
+        working-directory: aseprite
+        run: |
+          ./build/bin/aseprite --version
+          test -x ./build/bin/aseprite
+          ldd ./build/bin/aseprite | grep "not found" && exit 1 || true
+
+      - name: Verify macOS
+        if: matrix.kind == 'macos'
+        shell: bash
+        working-directory: aseprite
+        run: |
+          ./build/bin/aseprite --version
+          test -x ./build/bin/aseprite
+
+      - name: Add build metadata
+        shell: bash
+        working-directory: aseprite
+        run: |
+          {
+            echo "aseprite_ref=\${{ needs.prepare.outputs.aseprite_ref }}"
+            echo "source_commit=$(git rev-parse HEAD)"
+            echo "source_describe=$(git describe --tags --always --dirty)"
+            echo "platform=\${{ matrix.name }}"
+            echo "runner=\${{ matrix.os }}"
+            echo "build_type=\${{ needs.prepare.outputs.build_type }}"
+          } > build/bin/BUILD-INFO.txt
+
+          cp EULA.txt build/bin/EULA.txt
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aseprite-\${{ needs.prepare.outputs.ref_safe }}-\${{ matrix.name }}
+          path: aseprite/build/bin
+          if-no-files-found: error
+          compression-level: 6
+          retention-days: 7
+
+[executed on device: firebase-kaito-1746945628770 (4dcf38b1-4464-43d0-b972-9318153ae171)]
