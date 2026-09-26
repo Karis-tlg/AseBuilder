@@ -1,0 +1,41 @@
+name: Test All Matrix
+
+on:
+  push:
+    paths:
+      - ".github/workflows/test-all-matrix.yml"
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prep.outputs.matrix }}
+    steps:
+      - id: prep
+        shell: bash
+        run: |
+          requested_platform="all"
+          case "$requested_platform" in
+            windows)
+              matrix='{"include":[{"os":"windows-latest","name":"Windows-x64","kind":"windows"}]}'
+              ;;
+            linux)
+              matrix='{"include":[{"os":"ubuntu-latest","name":"Linux-x64","kind":"linux"}]}'
+              ;;
+            macos)
+              matrix='{"include":[{"os":"macos-latest","name":"macOS","kind":"macos"}]}'
+              ;;
+            all)
+              matrix='{"include":[{"os":"windows-latest","name":"Windows-x64","kind":"windows"},{"os":"ubuntu-latest","name":"Linux-x64","kind":"linux"},{"os":"macos-latest","name":"macOS","kind":"macos"}]}'
+              ;;
+          esac
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+
+  matrix-check:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: echo "matrix ok -> ${{ matrix.kind }} / ${{ matrix.name }} / ${{ matrix.os }}"
