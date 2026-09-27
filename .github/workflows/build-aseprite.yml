@@ -43,7 +43,7 @@ on:
 # - Build Windows/Linux/macOS only when a new release appears.
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   prepare:
@@ -177,6 +177,8 @@ jobs:
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=${{ needs.prepare.outputs.build_type }} \
             -DENABLE_TESTS=OFF \
+            -DCURL_USE_SCHANNEL=ON \
+            -DCURL_USE_OPENSSL=OFF \
             -DLAF_BACKEND=skia \
             -DSKIA_DIR="$SKIA_DIR" \
             -DSKIA_LIBRARY_DIR="$SKIA_LIBRARY_DIR"
@@ -227,37 +229,6 @@ jobs:
         working-directory: aseprite
         run: ninja -C build aseprite
 
-      - name: Bundle Windows runtime DLLs
-        if: matrix.kind == 'windows'
-        shell: pwsh
-        working-directory: aseprite
-        run: |
-          $bin = (Resolve-Path ".\build\bin").Path
-
-          # Aseprite links against OpenSSL libcrypto on GitHub's Windows runner.
-          # The old verification passed only because OpenSSL was in the runner PATH.
-          $crypto = (& where.exe libcrypto-3-x64.dll 2>$null | Select-Object -First 1)
-          if (-not $crypto) {
-            $known = @(
-              "C:\Program Files\OpenSSL\bin\libcrypto-3-x64.dll",
-              "C:\Program Files\OpenSSL-Win64\bin\libcrypto-3-x64.dll"
-            )
-            $crypto = $known | Where-Object { Test-Path $_ } | Select-Object -First 1
-          }
-          if (-not $crypto) { throw "libcrypto-3-x64.dll was not found on the runner" }
-          Copy-Item $crypto (Join-Path $bin "libcrypto-3-x64.dll") -Force
-
-          # Bundle common MSVC runtime DLLs for a more portable artifact.
-          $crtDir = Join-Path $env:VCToolsRedistDir "x64\Microsoft.VC143.CRT"
-          foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
-            $src = Join-Path $crtDir $dll
-            if (Test-Path $src) {
-              Copy-Item $src (Join-Path $bin $dll) -Force
-            }
-          }
-
-          Get-ChildItem $bin -Filter "*.dll" | Select-Object Name,Length
-
       - name: Verify Windows
         if: matrix.kind == 'windows'
         shell: pwsh
@@ -265,14 +236,21 @@ jobs:
         run: |
           $exe = ".\build\bin\aseprite.exe"
           if (!(Test-Path $exe)) { throw "aseprite.exe missing" }
-          if (!(Test-Path ".\build\bin\libcrypto-3-x64.dll")) { throw "libcrypto-3-x64.dll missing from package" }
 
-          # Simulate a normal user's machine by removing GitHub OpenSSL/VS paths.
+          $deps = (& dumpbin.exe /dependents $exe | Out-String)
+          Write-Host $deps
+          if ($deps -match "libcrypto-3-x64\.dll") {
+            throw "Windows build still depends on libcrypto-3-x64.dll"
+          }
+
+          # Simulate a clean user machine: GitHub's OpenSSL/VS paths are removed.
           $savedPath = $env:PATH
           try {
             $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
             & $exe --version
-            if ($LASTEXITCODE -ne 0) { throw "Portable Windows launch test failed with exit code $LASTEXITCODE" }
+            if ($LASTEXITCODE -ne 0) {
+              throw "Portable Windows launch test failed with exit code $LASTEXITCODE"
+            }
           }
           finally {
             $env:PATH = $savedPath
@@ -318,3 +296,20 @@ jobs:
           if-no-files-found: error
           compression-level: 6
           retention-days: 7
+
+
+  mark-push-test:
+    if: github.event_name == 'push' && always()
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Record validation result
+        shell: bash
+        run: |
+          printf 'build_result=${{ needs.build.result }}\n' > .github/windows-schannel-test.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/windows-schannel-test.txt
+          git commit -m "test: record Windows Schannel build result" || true
+          git push
