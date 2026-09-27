@@ -113,6 +113,7 @@ $crypto
           } > .github/portable-test-result.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/portable-test-result.txt .github/portable-deps.txt
+          git add .github/portable-test-result.txt
+          if [ -f .github/portable-deps.txt ]; then git add .github/portable-deps.txt; fi
           git commit -m "test: record Windows portable result" || true
           git push
