@@ -2,9 +2,6 @@
 name: Build Aseprite
 
 on:
-  push:
-    paths:
-      - ".github/workflows/build-aseprite.yml"
   workflow_dispatch:
     inputs:
       aseprite_ref:
@@ -43,7 +40,7 @@ on:
 # - Build Windows/Linux/macOS only when a new release appears.
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   prepare:
@@ -296,20 +293,3 @@ jobs:
           if-no-files-found: error
           compression-level: 6
           retention-days: 7
-
-
-  mark-push-test:
-    if: github.event_name == 'push' && always()
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: Record validation result
-        shell: bash
-        run: |
-          printf 'build_result=${{ needs.build.result }}\n' > .github/windows-schannel-test.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/windows-schannel-test.txt
-          git commit -m "test: record Windows Schannel build result" || true
-          git push
