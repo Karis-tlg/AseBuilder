@@ -179,6 +179,8 @@ jobs:
             -DENABLE_TESTS=OFF \
             -DCURL_USE_SCHANNEL=ON \
             -DCURL_USE_OPENSSL=OFF \
+            -DENABLE_OPENSSL=OFF \
+            -DENABLE_CNG=ON \
             -DLAF_BACKEND=skia \
             -DSKIA_DIR="$SKIA_DIR" \
             -DSKIA_LIBRARY_DIR="$SKIA_LIBRARY_DIR"
@@ -312,9 +314,9 @@ jobs:
             printf 'run_id=${{ github.run_id }}\n'
             printf 'build_result=${{ needs.build.result }}\n'
             printf 'head_sha=${{ github.sha }}\n'
-          } > .github/windows-final-validation.txt
+          } > ".github/windows-final-validation-${{ github.run_id }}.txt"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/windows-final-validation.txt
+          git add ".github/windows-final-validation-${{ github.run_id }}.txt"
           git commit -m "test: record final Windows validation" || true
           git push
