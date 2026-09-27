@@ -244,9 +244,10 @@ jobs:
           $savedPath = $env:PATH
           try {
             $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
-            & $exe --version
-            if ($LASTEXITCODE -ne 0) {
-              throw "Portable Windows launch test failed with exit code $LASTEXITCODE"
+            $version = (& $exe --version | Out-String).Trim()
+            Write-Host $version
+            if ($version -notmatch "^Aseprite ") {
+              throw "Unexpected Aseprite version output: $version"
             }
           }
           finally {
