@@ -1,0 +1,90 @@
+name: Test Windows Portable Package
+
+on:
+  push:
+    paths:
+      - ".github/workflows/test-windows-portable.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  portable-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download previously verified Windows build
+        uses: actions/download-artifact@v4
+        with:
+          repository: Karis-tlg/AseBuilder
+          run-id: 36261507045
+          name: Aseprite-v1.3.18.6-Windows-x64
+          github-token: ${{ github.token }}
+          path: package
+
+      - name: Setup MSVC runtime paths
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
+      - name: Bundle runtime DLLs
+        shell: pwsh
+        run: |
+          $bin = (Resolve-Path ".\package").Path
+
+          $crypto = (& where.exe libcrypto-3-x64.dll 2>$null | Select-Object -First 1)
+          if (-not $crypto) {
+            $known = @(
+              "C:\Program Files\OpenSSL\bin\libcrypto-3-x64.dll",
+              "C:\Program Files\OpenSSL-Win64\bin\libcrypto-3-x64.dll"
+            )
+            $crypto = $known | Where-Object { Test-Path $_ } | Select-Object -First 1
+          }
+          if (-not $crypto) { throw "libcrypto-3-x64.dll was not found" }
+          Copy-Item $crypto (Join-Path $bin "libcrypto-3-x64.dll") -Force
+
+          $crtDir = Join-Path $env:VCToolsRedistDir "x64\Microsoft.VC143.CRT"
+          foreach ($dll in @("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll")) {
+            $src = Join-Path $crtDir $dll
+            if (Test-Path $src) {
+              Copy-Item $src (Join-Path $bin $dll) -Force
+            }
+          }
+
+          Get-ChildItem $bin -Filter "*.dll" | Format-Table Name,Length
+
+      - name: Verify package with clean PATH
+        shell: pwsh
+        run: |
+          if (!(Test-Path ".\package\aseprite.exe")) { throw "aseprite.exe missing" }
+          if (!(Test-Path ".\package\libcrypto-3-x64.dll")) { throw "libcrypto-3-x64.dll missing" }
+
+          $savedPath = $env:PATH
+          try {
+            $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+            & ".\package\aseprite.exe" --version
+            if ($LASTEXITCODE -ne 0) { throw "Portable launch failed: $LASTEXITCODE" }
+          }
+          finally {
+            $env:PATH = $savedPath
+          }
+
+      - name: Upload fixed portable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aseprite-v1.3.18.6-Windows-x64-Portable-FIX
+          path: package
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Mark portable test success
+        shell: bash
+        run: |
+          printf 'portable windows package passed\n' > .github/portable-test-pass.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/portable-test-pass.txt
+          git commit -m "test: Windows portable package passed"
+          git push
