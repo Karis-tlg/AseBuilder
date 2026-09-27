@@ -1,0 +1,45 @@
+name: Export Windows Runtime
+
+on:
+  push:
+    paths:
+      - ".github/workflows/export-win-runtime.yml"
+
+jobs:
+  export:
+    runs-on: windows-latest
+    steps:
+      - name: Setup MSVC
+        uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+
+      - name: Collect runtime DLLs
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force runtime | Out-Null
+
+          $crypto = (& where.exe libcrypto-3-x64.dll 2>$null | Select-Object -First 1)
+          if (-not $crypto) { throw "libcrypto-3-x64.dll not found" }
+
+          $opensslDir = Split-Path $crypto -Parent
+          Get-ChildItem $opensslDir -Filter "*.dll" -File | ForEach-Object {
+            Copy-Item $_.FullName ".\runtime\$($_.Name)" -Force
+          }
+
+          $crtDir = Join-Path $env:VCToolsRedistDir "x64\Microsoft.VC143.CRT"
+          if (Test-Path $crtDir) {
+            Get-ChildItem $crtDir -Filter "*.dll" -File | ForEach-Object {
+              Copy-Item $_.FullName ".\runtime\$($_.Name)" -Force
+            }
+          }
+
+          Get-ChildItem runtime | Format-Table Name,Length
+
+      - name: Upload runtime
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Runtime-DLLs
+          path: runtime
+          if-no-files-found: error
+          retention-days: 1
