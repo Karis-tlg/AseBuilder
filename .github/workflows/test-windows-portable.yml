@@ -58,6 +58,20 @@ jobs:
 
           Get-ChildItem $bin -Filter "*.dll" | Format-Table Name,Length
 
+      - name: Inspect Windows DLL dependencies
+        id: deps
+        shell: pwsh
+        run: |
+          $ase = (& dumpbin.exe /dependents ".\package\aseprite.exe" | Out-String)
+          $crypto = (& dumpbin.exe /dependents ".\package\libcrypto-3-x64.dll" | Out-String)
+          @"
+=== aseprite.exe ===
+$ase
+
+=== libcrypto-3-x64.dll ===
+$crypto
+"@ | Set-Content ".github\portable-deps.txt"
+
       - name: Verify package with clean PATH
         id: verify
         shell: pwsh
@@ -93,11 +107,12 @@ jobs:
             printf 'download=${{ steps.download.outcome }}\n'
             printf 'setup=${{ steps.setup.outcome }}\n'
             printf 'bundle=${{ steps.bundle.outcome }}\n'
+            printf 'deps=${{ steps.deps.outcome }}\n'
             printf 'verify=${{ steps.verify.outcome }}\n'
             printf 'upload=${{ steps.upload.outcome }}\n'
           } > .github/portable-test-result.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/portable-test-result.txt
+          git add .github/portable-test-result.txt .github/portable-deps.txt
           git commit -m "test: record Windows portable result" || true
           git push
