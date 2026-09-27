@@ -1,0 +1,20 @@
+36331986119	Diagnose Actions Status	push	in_progress		b1103156f600626f80f0199de7b15e72d580ab20	2026-09-27T16:06:14Z	2026-09-27T16:06:18Z
+36329419658	Build Aseprite	push	in_progress		2b06c080163de33ff9b19f1c31f0488049d15825	2026-09-27T15:24:17Z	2026-09-27T15:24:24Z
+36328971183	Build Aseprite	push	completed	failure	3009f44d5639aa78cc03c73e935bd918564a9f0b	2026-09-27T15:16:52Z	2026-09-27T16:00:44Z
+36302346387	Validate Patched Windows Package	push	completed	success	b593c3fb83b290e51cd4484be5b5be514e2ed8e7	2026-09-27T07:11:36Z	2026-09-27T07:11:54Z
+36302291318	Validate Patched Windows Package	push	completed	failure	e22d481f78dcf30a97142803a8fed4fb149d46e8	2026-09-27T07:10:33Z	2026-09-27T07:10:45Z
+36302199864	Export VCRuntime	push	completed	success	efccfb059584b143e9634ae26e702bdf26d074fa	2026-09-27T07:08:44Z	2026-09-27T07:08:53Z
+36302137617	Export Windows Runtime	push	completed	success	da82fea25a34a129f19504cbff8ca52bfe95ea0f	2026-09-27T07:07:29Z	2026-09-27T07:07:48Z
+36301546050	.github/workflows/test-windows-portable.yml	push	completed	failure	12bf2db5f671290226e3ed399e347eaa0ff5080f	2026-09-27T06:55:47Z	2026-09-27T06:55:47Z
+36301338183	.github/workflows/test-windows-portable.yml	push	completed	failure	10ffac68b1d552f165ae3bc0499d4173078907a4	2026-09-27T06:51:35Z	2026-09-27T06:51:35Z
+36301202338	Build Aseprite	push	completed	failure	1128a11a1ea180b8bb533864cf7abf09886277d0	2026-09-27T06:48:50Z	2026-09-27T07:28:58Z
+36301201576	.github/workflows/test-windows-portable.yml	push	completed	failure	1128a11a1ea180b8bb533864cf7abf09886277d0	2026-09-27T06:48:49Z	2026-09-27T06:48:49Z
+36301060645	.github/workflows/test-windows-portable.yml	push	completed	failure	20350e06f456d3d113cd39b2d00f55c395198798	2026-09-27T06:45:57Z	2026-09-27T06:45:57Z
+36300962283	.github/workflows/test-windows-portable.yml	push	completed	failure	6906bcfde9c60ff39ff852ae84bfd5a89acaf2b2	2026-09-27T06:44:03Z	2026-09-27T06:44:03Z
+36300892904	Test Windows Portable Package	push	completed	failure	c6e15c74045cf5ab561ebe7c7a8671319c25acfb	2026-09-27T06:42:34Z	2026-09-27T06:43:04Z
+36300807132	Test Windows Portable Package	push	completed	failure	20240dd72590beac16fdfc110fc5764c63f99e00	2026-09-27T06:40:48Z	2026-09-27T06:41:34Z
+36300645859	Test Windows Portable Package	push	completed	failure	a44a662666c33c9a74f4efc9cf1879ac43153f53	2026-09-27T06:37:32Z	2026-09-27T06:37:59Z
+36300594246	Build Aseprite	push	completed	failure	5a2f02c18e061e7d9700cbc6be3d503bb53bdfb8	2026-09-27T06:36:29Z	2026-09-27T07:09:21Z
+36281053232	Test All Matrix	push	completed	success	5f3f90b092aeeab994873beecc2a9613d723543f	2026-09-26T23:58:09Z	2026-09-26T23:58:33Z
+36281030873	Test All Matrix	push	completed	success	7ae6252b192da75c9624758653e72a73a25387bf	2026-09-26T23:57:37Z	2026-09-26T23:57:52Z
+36264346396	Build Aseprite	workflow_dispatch	completed	success	6c82e35122f4326c30718006fbd6e655c58a1e23	2026-09-26T18:57:12Z	2026-09-26T19:23:26Z
