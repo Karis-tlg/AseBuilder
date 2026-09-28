@@ -18,8 +18,6 @@ A lightweight GitHub Actions workflow for building **Aseprite from source** on W
   - `Release`
   - `RelWithDebInfo`
 - Build artifacts are kept temporarily by GitHub Actions
-- Automatic scheduled builds are currently **disabled**
-- Windows builds use the native Windows TLS stack (Schannel/CNG), avoiding the external `libcrypto-3-x64.dll` dependency that can break portable builds
 
 ## Usage
 
